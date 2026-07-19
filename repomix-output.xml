@@ -1,0 +1,339 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+bot/
+  telegram.py
+crawler/
+  search.py
+database/
+  data/
+    jobs.db
+  db.py
+  jobs.py
+model/
+  job.py
+  mapper.py
+.gitignore
+main.py
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="bot/telegram.py">
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.request import HTTPXRequest
+from dotenv import load_dotenv
+# import os
+
+load_dotenv()
+
+# Adicionar a tipagem correta ajuda o Python e evita problemas de execução
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text('Olá! Eu sou um bot, vou te ajudar mandando estágios encontrados por mim! :).')
+
+def create_bot(bot_token):
+    # Criamos uma configuração de rede mais "paciente" para evitar o erro de TimedOut
+    config_rede = HTTPXRequest(connect_timeout=30.0, read_timeout=30.0)
+
+    # Cria a aplicação injetando a configuração de rede
+    application = Application.builder().token(bot_token).request(config_rede).build()
+
+    # Adiciona o handler para o comando /start
+    application.add_handler(CommandHandler("start", start))
+
+    # Inicia o bot
+    print("Bot iniciado... Pressione Ctrl+C para parar.")
+    return application
+
+async def send_job_notifications(application: Application, jobs_to_send, chat_id):
+    if not jobs_to_send:
+        print("Nenhuma nova vaga para enviar.")
+        return
+
+    for job in jobs_to_send:
+        message_text = (
+            f"*Título:* {job.title}\n"
+            f"*Empresa:* {job.company}\n"
+            f"*Local:* {job.zone}\n"
+            f"*Fonte:* {job.source}\n\n"
+            f"[Ver Vaga]({job.url})"
+        )
+        try:
+            await application.bot.send_message(
+                chat_id=chat_id,
+                text=message_text,
+                parse_mode='Markdown'
+            )
+            print(f"Vaga enviada: {job.title}")
+        except Exception as e:
+            print(f"Erro ao enviar vaga {job.title}: {e}")
+</file>
+
+<file path="crawler/search.py">
+import requests
+from dotenv import load_dotenv
+# import os
+
+KEYWORDS = [
+    "estágio",
+    "estagiário"
+]
+
+load_dotenv()
+
+# URL = os.getenv("URL_API")
+
+def search_job():
+    page_number = 1
+    all_jobs_find = []
+
+    while True:
+        url = f"https://querovagastech.com.br/api/jobs?page={page_number}&pageSize=20&sort=postedAt%3Adesc"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        jobs_on_page = data["items"]
+
+        if not jobs_on_page:
+            print("vagas acabaram...")
+            break
+        else:
+            all_jobs_find.extend(jobs_on_page)
+            page_number += 1
+
+    return all_jobs_find
+
+def filter_jobs(jobs):
+    filtered_vagas = []
+    for job in jobs:
+        title = job.get("title", "").lower()
+        seniority = job.get("seniority", "").lower()
+        location = job.get("location", "").lower()
+        work_mode = job.get("workMode", "").lower()
+
+        is_valid_location_or_mode = (work_mode == "remote") or (location == "salvador - ba")
+
+        has_keyword = False
+        for keyword in KEYWORDS:
+            if keyword.lower() in title or keyword.lower() in seniority:
+                has_keyword = True
+                break
+
+        if is_valid_location_or_mode and has_keyword:
+            filtered_vagas.append(job)
+
+    return filtered_vagas
+</file>
+
+<file path="database/db.py">
+import sqlite3
+
+def get_connection():
+    return sqlite3.connect("database/data/jobs.db")
+
+conn = get_connection()
+cursor = conn.cursor()
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    company TEXT NOT NULL,
+    url TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL,
+    zone TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)
+""")
+
+conn.commit()
+conn.close()
+</file>
+
+<file path="database/jobs.py">
+from database.db import get_connection
+from model.job import Job
+
+
+def save_job(job: Job):
+    conn = get_connection()
+
+    conn.execute(
+        """
+        INSERT INTO jobs (
+            title,
+            company,
+            url,
+            source,
+            zone
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            job.title,
+            job.company,
+            job.url,
+            job.source,
+            job.zone
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def job_exists(url: str) -> bool:
+    conn = get_connection()
+
+    result = conn.execute(
+        "SELECT 1 FROM jobs WHERE url = ?",
+        (url,)
+    ).fetchone()
+
+    conn.close()
+
+    return result is not None
+</file>
+
+<file path="model/job.py">
+# models/job.py
+
+class Job:
+
+    def __init__(
+        self,
+        title,
+        company,
+        url,
+        source,
+        zone,
+        work_mode
+    ):
+        self.title = title
+        self.company = company
+        self.url = url
+        self.source = source
+        self.zone = zone
+        self.work_mode = work_mode
+</file>
+
+<file path="model/mapper.py">
+from database.jobs import save_job, job_exists
+from .job import Job
+
+def mapper_job_save(filtered_jobs):
+    jobs_objects = []
+    for job_dict in filtered_jobs:
+        # Cria uma instância da classe Job a partir do dicionário
+        # Certifique-se de que as chaves do dicionário correspondem aos parâmetros do construtor de Job
+        # E que os campos esperados (title, company, url, source, zone) existem no dicionário
+        new_job = Job(
+            title=job_dict.get("title", "N/A"),
+            company=job_dict.get("company", "N/A"),
+            url=job_dict.get("applyUrl", "N/A"),
+            source=job_dict.get("sourceName", "N/A"), # Assumindo que a API retorna um campo 'source'
+            zone=job_dict.get("location", "N/A"), # Assumindo que a API retorna um campo 'zone'
+            work_mode=job_dict.get("workMode", "N/A")
+        )
+        jobs_objects.append(new_job)
+
+    print(jobs_objects) # Agora temos uma lista de objetos Job
+
+    notif_new_job = []
+
+    for jobs in jobs_objects:
+        if not job_exists(jobs.url):
+            notif_new_job.append(jobs)
+            save_job(jobs)
+
+    return notif_new_job
+</file>
+
+<file path=".gitignore">
+.env
+venv
+**/**/__pycache
+</file>
+
+<file path="main.py">
+from bot.telegram import create_bot, send_job_notifications
+from crawler.search import search_job, filter_jobs
+from model.mapper import mapper_job_save
+from dotenv import load_dotenv
+import os
+import asyncio
+
+load_dotenv()
+
+TELEGRAM_CHAT_ID = os.getenv("CHAT_ID")
+BOT_TOKEN = os.getenv("TOKEN_BOT")
+
+async def main_loop():
+    print("Iniciando ciclo de busca e notificação...")
+    raw_jobs = search_job()  # Pega os dados da API
+    filtered_jobs_dicts = filter_jobs(raw_jobs)  # Filtra os dados da API (ainda dicionários)
+    newly_saved_jobs = mapper_job_save(filtered_jobs_dicts) # Salva novas vagas e retorna as salvas
+
+    # Cria a instância do bot fora do loop para não recriar a cada ciclo
+    application = create_bot(BOT_TOKEN)
+
+    if newly_saved_jobs:
+        print(f"Encontradas {len(newly_saved_jobs)} novas vagas. Enviando notificações...")
+        await send_job_notifications(application, newly_saved_jobs, TELEGRAM_CHAT_ID)
+    else:
+        print("Nenhuma nova vaga encontrada neste ciclo.")
+
+
+async def main():
+    while True:
+        await main_loop()
+        print("Ciclo concluído. Aguardando para o próximo...")
+        # Aguarda 4 hora (14400 segundos) antes do próximo ciclo
+        await asyncio.sleep(14400)
+
+if __name__ == '__main__':
+    asyncio.run(main())
+</file>
+
+</files>
