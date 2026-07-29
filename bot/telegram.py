@@ -36,7 +36,7 @@ async def send_job_notifications(application: Application, jobs_to_send, chat_id
             f"*Título:* {job.title}\n"
             f"*Empresa:* {job.company}\n"
             f"*Local:* {job.zone}\n"
-            f"*Type:* {job.work_mode}"
+            f"*Type:* {job.work_mode}\n"
             f"*Fonte:* {job.source}\n\n"
             f"[Ver Vaga]({job.url})"
         )
