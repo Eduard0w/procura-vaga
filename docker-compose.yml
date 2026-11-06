@@ -1,0 +1,18 @@
+services:
+  bot:
+    build: .
+    image: procura-vaga:latest
+    container_name: procura-vaga
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - procura_vaga_data:/app/database/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  procura_vaga_data:

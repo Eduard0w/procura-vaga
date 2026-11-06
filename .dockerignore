@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+venv
+**/__pycache__
+**/*.pyc
+repomix-output.xml
+README.md
+LICENSE
+database/data/*.db
+database/data/*.db-*
