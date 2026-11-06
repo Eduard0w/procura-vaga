@@ -1,29 +1,33 @@
-from database.jobs import save_job, job_exists
+from database.jobs import job_exists
 from .job import Job
 
-def mapper_job_save(filtered_jobs):
-    jobs_objects = []
+
+def _to_job(job_dict):
+    return Job(
+        title=job_dict.get("title", "N/A"),
+        company=job_dict.get("company", "N/A"),
+        url=job_dict.get("applyUrl", "N/A"),
+        source=job_dict.get("sourceName", "N/A"),
+        zone=job_dict.get("location", "N/A"),
+        work_mode=job_dict.get("workMode", "N/A")
+    )
+
+
+def get_new_jobs(filtered_jobs):
+    new_jobs = []
+    seen_urls = set()
+
     for job_dict in filtered_jobs:
-        # Cria uma instância da classe Job a partir do dicionário
-        # Certifique-se de que as chaves do dicionário correspondem aos parâmetros do construtor de Job
-        # E que os campos esperados (title, company, url, source, zone) existem no dicionário
-        new_job = Job(
-            title=job_dict.get("title", "N/A"),
-            company=job_dict.get("company", "N/A"),
-            url=job_dict.get("applyUrl", "N/A"),
-            source=job_dict.get("sourceName", "N/A"), # Assumindo que a API retorna um campo 'source'
-            zone=job_dict.get("location", "N/A"), # Assumindo que a API retorna um campo 'zone'
-            work_mode=job_dict.get("workMode", "N/A")
-        )
-        jobs_objects.append(new_job)
+        job = _to_job(job_dict)
 
-    print(jobs_objects) # Agora temos uma lista de objetos Job
+        if not job.url or job.url == "N/A":
+            continue
+        if job.url in seen_urls:
+            continue
 
-    notif_new_job = []
+        seen_urls.add(job.url)
 
-    for jobs in jobs_objects:
-        if not job_exists(jobs.url):
-            notif_new_job.append(jobs)
-            save_job(jobs)
+        if not job_exists(job.url):
+            new_jobs.append(job)
 
-    return notif_new_job
+    return new_jobs

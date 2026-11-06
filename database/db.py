@@ -1,7 +1,14 @@
 import sqlite3
+from pathlib import Path
+
+DB_DIR = Path(__file__).resolve().parent / "data"
+DB_PATH = DB_DIR / "jobs.db"
+
 
 def get_connection():
-    return sqlite3.connect("database/data/jobs.db")
+    DB_DIR.mkdir(parents=True, exist_ok=True)
+    return sqlite3.connect(DB_PATH)
+
 
 conn = get_connection()
 cursor = conn.cursor()
